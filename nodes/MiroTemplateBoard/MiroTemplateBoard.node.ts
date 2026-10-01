@@ -318,6 +318,7 @@ export class MiroTemplateBoard implements INodeType {
 							},
 						);
 						populated.push({ title, frameId: frame.id, textId: text.id as string });
+						
 					}
 				} catch (fillError) {
 					const done = populated.map((p) => p.title).join(', ') || 'none';
