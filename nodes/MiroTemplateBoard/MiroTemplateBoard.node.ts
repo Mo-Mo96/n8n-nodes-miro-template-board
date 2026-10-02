@@ -103,6 +103,29 @@ function framesByTitle(frames: Frame[]): Map<string, Frame[]> {
 	return lookup;
 }
 
+// Turns the optional sharing dropdowns into Miro's policy object.
+// Dropdowns left on "Keep Miro Default" are skipped, so only real choices are sent.
+// Returns undefined when nothing was set, so the copy request has no policy at all.
+function buildPolicy(sharing: IDataObject): IDataObject | undefined {
+	const sharingKeys = ['access', 'teamAccess', 'organizationAccess', 'inviteToAccountAndBoardLinkAccess'];
+	const permissionKeys = ['sharingAccess', 'copyAccess', 'collaborationToolsStartAccess'];
+
+	const pick = (keys: string[]): IDataObject | undefined => {
+		const picked: IDataObject = {};
+		for (const key of keys) if (sharing[key] !== undefined && sharing[key] !== '') picked[key] = sharing[key];
+		return Object.keys(picked).length > 0 ? picked : undefined;
+	};
+
+	const sharingPolicy = pick(sharingKeys);
+	const permissionsPolicy = pick(permissionKeys);
+	if (!sharingPolicy && !permissionsPolicy) return undefined;
+
+	const policy: IDataObject = {};
+	if (sharingPolicy) policy.sharingPolicy = sharingPolicy;
+	if (permissionsPolicy) policy.permissionsPolicy = permissionsPolicy;
+	return policy;
+}
+
 export class MiroTemplateBoard implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Miro Template Board',
@@ -178,6 +201,115 @@ export class MiroTemplateBoard implements INodeType {
 					},
 				},
 			},
+			{
+				displayName: 'Customize Sharing',
+				name: 'customizeSharing',
+				type: 'boolean',
+				default: false,
+				description:
+					"Whether to set access rules on each new board. When off, new boards follow Miro's defaults and your team or organization settings.",
+			},
+			{
+				displayName: 'Anyone With the Link',
+				name: 'access',
+				type: 'options',
+				default: '',
+				description: 'What people outside the team can do if they have the board link',
+				displayOptions: { show: { customizeSharing: [true] } },
+				options: [
+					{ name: 'Keep Miro Default', value: '' },
+					{ name: 'No Access', value: 'private' },
+					{ name: 'Can View', value: 'view' },
+					{ name: 'Can Comment', value: 'comment' },
+					{ name: 'Can Edit', value: 'edit' },
+				],
+			},
+			{
+				displayName: 'Team Members',
+				name: 'teamAccess',
+				type: 'options',
+				default: '',
+				description: 'What members of the destination team can do',
+				displayOptions: { show: { customizeSharing: [true] } },
+				options: [
+					{ name: 'Keep Miro Default', value: '' },
+					{ name: 'No Access', value: 'private' },
+					{ name: 'Can View', value: 'view' },
+					{ name: 'Can Comment', value: 'comment' },
+					{ name: 'Can Edit', value: 'edit' },
+				],
+			},
+			{
+				displayName: 'Organization Members',
+				name: 'organizationAccess',
+				type: 'options',
+				default: '',
+				description: 'What members of your Miro organization can do',
+				displayOptions: { show: { customizeSharing: [true] } },
+				options: [
+					{ name: 'Keep Miro Default', value: '' },
+					{ name: 'No Access', value: 'private' },
+					{ name: 'Can View', value: 'view' },
+					{ name: 'Can Comment', value: 'comment' },
+					{ name: 'Can Edit', value: 'edit' },
+				],
+			},
+			{
+				displayName: 'Invite Link Role',
+				name: 'inviteToAccountAndBoardLinkAccess',
+				type: 'options',
+				default: '',
+				description: 'Role given to people who join through the invite-to-team-and-board link',
+				displayOptions: { show: { customizeSharing: [true] } },
+				options: [
+					{ name: 'Keep Miro Default', value: '' },
+					{ name: 'Link Disabled', value: 'no_access' },
+					{ name: 'Viewer', value: 'viewer' },
+					{ name: 'Commenter', value: 'commenter' },
+					{ name: 'Editor', value: 'editor' },
+					{ name: 'Co-Owner', value: 'coowner' },
+				],
+			},
+			{
+				displayName: 'Who Can Change Sharing',
+				name: 'sharingAccess',
+				type: 'options',
+				default: '',
+				displayOptions: { show: { customizeSharing: [true] } },
+				options: [
+					{ name: 'Keep Miro Default', value: '' },
+					{ name: 'Team Members With Editing Rights', value: 'team_members_with_editing_rights' },
+					{ name: 'Owner and Co-Owners Only', value: 'owner_and_coowners' },
+				],
+			},
+			{
+				displayName: 'Who Can Copy and Export',
+				name: 'copyAccess',
+				type: 'options',
+				default: '',
+				description: 'Who can copy the board or its objects, download images, and save it as a template or PDF',
+				displayOptions: { show: { customizeSharing: [true] } },
+				options: [
+					{ name: 'Keep Miro Default', value: '' },
+					{ name: 'Anyone', value: 'anyone' },
+					{ name: 'Team Members', value: 'team_members' },
+					{ name: 'Team Editors', value: 'team_editors' },
+					{ name: 'Board Owner Only', value: 'board_owner' },
+				],
+			},
+			{
+				displayName: 'Who Can Start Collaboration Tools',
+				name: 'collaborationToolsStartAccess',
+				type: 'options',
+				default: '',
+				description: 'Who can start the timer, voting, video chat, screen sharing, and attention management',
+				displayOptions: { show: { customizeSharing: [true] } },
+				options: [
+					{ name: 'Keep Miro Default', value: '' },
+					{ name: 'All Editors', value: 'all_editors' },
+					{ name: 'Owner and Co-Owners Only', value: 'board_owners_and_coowners' },
+				],
+			},
 		],
 	};
 
@@ -187,16 +319,29 @@ export class MiroTemplateBoard implements INodeType {
 			// It only reads the board; it never copies or changes anything.
 			async getFrameFields(this: ILoadOptionsFunctions): Promise<ResourceMapperFields> {
 				const boardId = extractBoardId(this.getCurrentNodeParameter('sourceBoard') as string);
-				if (!boardId) return { fields: [] };
+				if (!boardId) {
+					return { fields: [], emptyFieldsNotice: 'Paste a Source Board link above to load its frames.' };
+				}
 
-				const frames = await getAllFrames.call(this, boardId);
+				// Problems are returned as a message shown in place of the fields, not thrown.
+				// Throwing here makes n8n hide the whole Frame Content section without saying why.
+				let frames: Frame[];
+				try {
+					frames = await getAllFrames.call(this, boardId);
+				} catch {
+					return {
+						fields: [],
+						emptyFieldsNotice:
+							"Can't open this board. Check the Source Board link and that your Miro account has access to it.",
+					};
+				}
+
 				const problems = findTitleProblems(frames);
 				if (problems.length > 0) {
-					throw new NodeOperationError(
-						this.getNode(),
-						`Can't map this board's frames: ${problems.join(' ')}`,
-						{ description: 'Give every frame a unique, non-empty title on the source board, then refresh.' },
-					);
+					return {
+						fields: [],
+						emptyFieldsNotice: `${problems.join(' ')} Give every frame a unique, non-empty title in Miro, then refresh the field list.`,
+					};
 				}
 
 				return {
@@ -204,7 +349,7 @@ export class MiroTemplateBoard implements INodeType {
 						id: frame.title, // The title is the key. Never the source frame ID.
 						displayName: frame.title,
 						type: 'string',
-						required: false,
+						required: true, // Every frame must get content; n8n shows a red triangle while one is missing.
 						defaultMatch: false,
 						canBeUsedToMatch: false,
 						display: true,
@@ -232,6 +377,25 @@ export class MiroTemplateBoard implements INodeType {
 					if (value !== null && value !== undefined && String(value).trim() !== '') {
 						mappedContent[title] = String(value);
 					}
+				}
+
+				// Every frame field must have content for this item. Expressions can resolve to empty
+				// (e.g. a blank cell), so this is checked per item, before anything is created.
+				const emptyFrames = Object.entries(mapping.value ?? {})
+					.filter(([, value]) => value === null || value === undefined || String(value).trim() === '')
+					.map(([title]) => `"${title}"`);
+				if (emptyFrames.length > 0 || Object.keys(mappedContent).length === 0) {
+					throw new NodeOperationError(
+						this.getNode(),
+						emptyFrames.length > 0
+							? `Nothing was copied: no content for frame ${emptyFrames.join(', ')}.`
+							: 'Nothing was copied: no frame content was provided.',
+						{
+							itemIndex,
+							description:
+								'Fill every frame field. If a field uses an expression, check that the input item has a value for it.',
+						},
+					);
 				}
 
 				// ---------- 2. Preflight: check the source board BEFORE creating anything ----------
@@ -270,13 +434,32 @@ export class MiroTemplateBoard implements INodeType {
 				const requestedName = ((this.getNodeParameter('boardName', itemIndex, '') as string) || '').trim();
 				const boardName = (requestedName || `Copy of ${sourceBoard.name as string}`).slice(0, 60);
 
+				const sharingKeys = [
+					'access',
+					'teamAccess',
+					'organizationAccess',
+					'inviteToAccountAndBoardLinkAccess',
+					'sharingAccess',
+					'copyAccess',
+					'collaborationToolsStartAccess',
+				];
+				const sharingChoices: IDataObject = {};
+				if (this.getNodeParameter('customizeSharing', itemIndex, false) as boolean) {
+					for (const key of sharingKeys) {
+						sharingChoices[key] = this.getNodeParameter(key, itemIndex, '') as string;
+					}
+				}
+				const policy = buildPolicy(sharingChoices);
+
 				// ---------- 3. Copy the board ----------
+				const copyBody: IDataObject = { name: boardName, teamId };
+				if (policy) copyBody.policy = policy;
 				const newBoard = await miroRequest.call(
 					this,
 					'PUT',
 					'/boards',
 					{ copy_from: sourceBoardId },
-					{ name: boardName, teamId },
+					copyBody,
 				);
 				const newBoardId = newBoard.id as string;
 				const newBoardUrl = newBoard.viewLink as string;
@@ -318,7 +501,6 @@ export class MiroTemplateBoard implements INodeType {
 							},
 						);
 						populated.push({ title, frameId: frame.id, textId: text.id as string });
-						
 					}
 				} catch (fillError) {
 					const done = populated.map((p) => p.title).join(', ') || 'none';
@@ -340,6 +522,7 @@ export class MiroTemplateBoard implements INodeType {
 						boardName,
 						teamId,
 						sourceBoardId,
+						appliedPolicy: policy ?? 'Miro defaults',
 						populatedFrames: populated,
 					},
 					pairedItem: { item: itemIndex },
