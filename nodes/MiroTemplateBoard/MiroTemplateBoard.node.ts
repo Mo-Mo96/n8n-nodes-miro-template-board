@@ -134,7 +134,7 @@ export class MiroTemplateBoard implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Miro Template Board',
 		name: 'miroTemplateBoard',
-		icon: 'file:miro.svg',
+		icon: { light: 'file:miro.svg', dark: 'file:miro.svg' },
 		group: ['transform'],
 		version: [1],
 		subtitle: 'Copy and fill a template board',
