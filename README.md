@@ -1,46 +1,77 @@
 # n8n-nodes-miro-template-board
 
-This is an n8n community node. It lets you use _app/service name_ in your n8n workflows.
+An [n8n](https://n8n.io) community node that copies a Miro board as a template and fills its frames with data from your workflow.
 
-_App/service name_ is _one or two sentences describing the service this node integrates with_.
+Design a board once, with frames like **Call Summary**, **Pain Points**, and **Next Steps**. Every time your workflow runs, the node makes a fresh copy of that board and puts your data into the matching frames. The template itself is never changed.
 
-[n8n](https://n8n.io/) is a [fair-code licensed](https://docs.n8n.io/sustainable-use-license/) workflow automation platform.
+> This is a community node. It is not an official Miro or n8n product.
 
-[Installation](#installation)
-[Operations](#operations)
-[Credentials](#credentials)
-[Compatibility](#compatibility)
-[Usage](#usage)
-[Resources](#resources)
-[Version history](#version-history)
+## How it works
+
+1. You pick a **template board**. The node reads its frames and shows one field per frame title in the n8n editor.
+2. You map workflow data into those fields (for example, a form answer or a spreadsheet column).
+3. When the workflow runs, the node copies the whole board (layout, colours, shapes and all), finds each frame on the copy by its **title**, and adds your text inside it.
+4. It outputs the new board's link, so later steps can send it to Slack, email, a CRM, and so on.
+
+Each input item creates one board. A spreadsheet with 10 rows makes 10 boards.
 
 ## Installation
 
-Follow the [installation guide](https://docs.n8n.io/integrations/community-nodes/installation/) in the n8n community nodes documentation.
+In n8n, go to **Settings → Community Nodes → Install** and enter:
 
-## Operations
+```
+n8n-nodes-miro-template-board
+```
 
-_List the operations supported by your node._
+See n8n's guide to [installing community nodes](https://docs.n8n.io/integrations/community-nodes/installation/) for details.
 
-## Credentials
+## Connecting to Miro
 
-_If users need to authenticate with the app/service, provide details here. You should include prerequisites (such as signing up with the service), available authentication methods, and how to set them up._
+The node supports two ways to sign in. Both need a Miro app with these scopes:
 
-## Compatibility
+- `boards:read`
+- `boards:write`
 
-_State the minimum n8n version, as well as which versions you test against. You can also include any known version incompatibility issues._
+### Step 1: Create a Miro app
 
-## Usage
+1. In Miro, click your profile picture (top right), choose **Profile**, open **Your apps**, then click **Create new app**.
+2. Give it a name (for example, "n8n") and choose the team it belongs to.
+3. Under **Permissions**, select `boards:read` and `boards:write`.
+4. Keep this page open. You'll need the **Client ID** and **Client secret** for OAuth2.
 
-_This is an optional section. Use it to help users with any difficult or confusing aspects of the node._
+### Option A: Access token (quickest)
 
-_By the time users are looking for community nodes, they probably already know n8n basics. But if you expect new users, you can link to the [Try it out](https://docs.n8n.io/try-it-out/) documentation to help them get started._
+1. On your Miro app page, click **Install app and get OAuth token** and pick a team.
+2. Copy the token.
+3. In n8n, open the node, set **Authentication** to **Access Token**, and create a **Miro API** credential with that token.
 
-## Resources
+### Option B: OAuth2 (recommended)
 
-* [n8n community nodes documentation](https://docs.n8n.io/integrations/#community-nodes)
-* _Link to app/service documentation._
+1. In n8n, open the node, set **Authentication** to **OAuth2**, and create a **Miro OAuth2 API** credential.
+2. Copy the **OAuth Redirect URL** shown in n8n (it ends in `/rest/oauth2-credential/callback`).
+3. On your Miro app page, add that URL under **Redirect URI for OAuth2.0** and save.
+4. Back in n8n, paste your app's **Client ID** and **Client secret**, then click **Connect my account** and approve access in Miro.
 
-## Version history
+If your Miro app uses expiring tokens, n8n refreshes them automatically.
 
-_This is another optional section. If your node has multiple versions, include a short description of available versions and what changed, as well as any compatibility impact._
+## Preparing your template board
+
+The node matches frames by **title**, so:
+
+- Every frame you want to fill needs a **title**.
+- Every title must be **unique** on the board.
+
+If a frame is untitled or two frames share a title, the editor shows the problem in place of the fields, and runs stop before anything is copied.
+
+Changed the template in Miro? When n8n notices the frame list is out of date, it shows a ⚠ next to **Frame Content**. Click ↻ to reload.
+
+## Settings
+
+| Setting | What it does |
+|---|---|
+| **Authentication** | Access Token or OAuth2. |
+| **Source Board** | Link to (or ID of) the template board. It is never changed. |
+| **Destination Team ID** | The Miro team where new boards are created. Leave empty to use the template's team. |
+| **New Board Name** | Name for each new board (max 60 characters). Supports expressions, e.g. `Call with {{ $json.customer }}`. Leave empty for "Copy of" plus the template name. |
+| **Frame Content** | One field per frame. Every frame must get content. |
+| **Customize Sharing** | Optional. Set link access, team and
