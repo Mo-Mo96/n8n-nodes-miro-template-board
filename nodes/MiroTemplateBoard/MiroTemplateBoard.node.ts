@@ -2,6 +2,7 @@ import type {
 	IDataObject,
 	IExecuteFunctions,
 	IHttpRequestMethods,
+	JsonObject,
 	ILoadOptionsFunctions,
 	INodeExecutionData,
 	INodeType,
@@ -9,7 +10,7 @@ import type {
 	ResourceMapperFields,
 	ResourceMapperValue,
 } from 'n8n-workflow';
-import { NodeConnectionTypes, NodeOperationError, sleep } from 'n8n-workflow';
+import { NodeApiError, NodeConnectionTypes, NodeOperationError, sleep } from 'n8n-workflow';
 
 const MIRO_API = 'https://api.miro.com/v2';
 
@@ -133,6 +134,7 @@ export class MiroTemplateBoard implements INodeType {
 		icon: { light: 'file:example.svg', dark: 'file:example.dark.svg' },
 		group: ['transform'],
 		version: [1],
+		subtitle: 'Copy and fill a template board',
 		description: 'Copy a Miro board and fill its frames with workflow data',
 		defaults: {
 			name: 'Miro Template Board',
@@ -217,11 +219,11 @@ export class MiroTemplateBoard implements INodeType {
 				description: 'What people outside the team can do if they have the board link',
 				displayOptions: { show: { customizeSharing: [true] } },
 				options: [
-					{ name: 'Keep Miro Default', value: '' },
-					{ name: 'No Access', value: 'private' },
-					{ name: 'Can View', value: 'view' },
 					{ name: 'Can Comment', value: 'comment' },
 					{ name: 'Can Edit', value: 'edit' },
+					{ name: 'Can View', value: 'view' },
+					{ name: 'Keep Miro Default', value: '' },
+					{ name: 'No Access', value: 'private' },
 				],
 			},
 			{
@@ -232,11 +234,11 @@ export class MiroTemplateBoard implements INodeType {
 				description: 'What members of the destination team can do',
 				displayOptions: { show: { customizeSharing: [true] } },
 				options: [
-					{ name: 'Keep Miro Default', value: '' },
-					{ name: 'No Access', value: 'private' },
-					{ name: 'Can View', value: 'view' },
 					{ name: 'Can Comment', value: 'comment' },
 					{ name: 'Can Edit', value: 'edit' },
+					{ name: 'Can View', value: 'view' },
+					{ name: 'Keep Miro Default', value: '' },
+					{ name: 'No Access', value: 'private' },
 				],
 			},
 			{
@@ -247,11 +249,11 @@ export class MiroTemplateBoard implements INodeType {
 				description: 'What members of your Miro organization can do',
 				displayOptions: { show: { customizeSharing: [true] } },
 				options: [
-					{ name: 'Keep Miro Default', value: '' },
-					{ name: 'No Access', value: 'private' },
-					{ name: 'Can View', value: 'view' },
 					{ name: 'Can Comment', value: 'comment' },
 					{ name: 'Can Edit', value: 'edit' },
+					{ name: 'Can View', value: 'view' },
+					{ name: 'Keep Miro Default', value: '' },
+					{ name: 'No Access', value: 'private' },
 				],
 			},
 			{
@@ -262,12 +264,12 @@ export class MiroTemplateBoard implements INodeType {
 				description: 'Role given to people who join through the invite-to-team-and-board link',
 				displayOptions: { show: { customizeSharing: [true] } },
 				options: [
+					{ name: 'Co-Owner', value: 'coowner' },
+					{ name: 'Commenter', value: 'commenter' },
+					{ name: 'Editor', value: 'editor' },
 					{ name: 'Keep Miro Default', value: '' },
 					{ name: 'Link Disabled', value: 'no_access' },
 					{ name: 'Viewer', value: 'viewer' },
-					{ name: 'Commenter', value: 'commenter' },
-					{ name: 'Editor', value: 'editor' },
-					{ name: 'Co-Owner', value: 'coowner' },
 				],
 			},
 			{
@@ -278,8 +280,8 @@ export class MiroTemplateBoard implements INodeType {
 				displayOptions: { show: { customizeSharing: [true] } },
 				options: [
 					{ name: 'Keep Miro Default', value: '' },
-					{ name: 'Team Members With Editing Rights', value: 'team_members_with_editing_rights' },
 					{ name: 'Owner and Co-Owners Only', value: 'owner_and_coowners' },
+					{ name: 'Team Members With Editing Rights', value: 'team_members_with_editing_rights' },
 				],
 			},
 			{
@@ -290,11 +292,11 @@ export class MiroTemplateBoard implements INodeType {
 				description: 'Who can copy the board or its objects, download images, and save it as a template or PDF',
 				displayOptions: { show: { customizeSharing: [true] } },
 				options: [
-					{ name: 'Keep Miro Default', value: '' },
 					{ name: 'Anyone', value: 'anyone' },
-					{ name: 'Team Members', value: 'team_members' },
-					{ name: 'Team Editors', value: 'team_editors' },
 					{ name: 'Board Owner Only', value: 'board_owner' },
+					{ name: 'Keep Miro Default', value: '' },
+					{ name: 'Team Editors', value: 'team_editors' },
+					{ name: 'Team Members', value: 'team_members' },
 				],
 			},
 			{
@@ -305,8 +307,8 @@ export class MiroTemplateBoard implements INodeType {
 				description: 'Who can start the timer, voting, video chat, screen sharing, and attention management',
 				displayOptions: { show: { customizeSharing: [true] } },
 				options: [
-					{ name: 'Keep Miro Default', value: '' },
 					{ name: 'All Editors', value: 'all_editors' },
+					{ name: 'Keep Miro Default', value: '' },
 					{ name: 'Owner and Co-Owners Only', value: 'board_owners_and_coowners' },
 				],
 			},
@@ -479,7 +481,8 @@ export class MiroTemplateBoard implements INodeType {
 					for (const [title, content] of Object.entries(mappedContent)) {
 						const matches = lookup.get(title) ?? [];
 						if (matches.length !== 1) {
-							throw new Error(
+							throw new NodeOperationError(
+								this.getNode(),
 								matches.length === 0
 									? `No frame titled "${title}" on the copied board.`
 									: `${matches.length} frames titled "${title}" on the copied board.`,
@@ -535,8 +538,12 @@ export class MiroTemplateBoard implements INodeType {
 					});
 					continue;
 				}
-				if (error instanceof NodeOperationError) throw error;
-				throw new NodeOperationError(this.getNode(), error as Error, { itemIndex });
+								// Our own errors pass through unchanged (n8n returns the same error when wrapping one).
+								if (error instanceof NodeOperationError) {
+									throw new NodeOperationError(this.getNode(), error, { itemIndex });
+								}
+				// Anything not already a NodeOperationError came from the Miro API call itself.
+				throw new NodeApiError(this.getNode(), error as JsonObject, { itemIndex });
 			}
 		}
 
