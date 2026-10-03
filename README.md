@@ -74,4 +74,48 @@ Changed the template in Miro? When n8n notices the frame list is out of date, it
 | **Destination Team ID** | The Miro team where new boards are created. Leave empty to use the template's team. |
 | **New Board Name** | Name for each new board (max 60 characters). Supports expressions, e.g. `Call with {{ $json.customer }}`. Leave empty for "Copy of" plus the template name. |
 | **Frame Content** | One field per frame. Every frame must get content. |
-| **Customize Sharing** | Optional. Set link access, team and
+| **Customize Sharing** | Optional. Set link access, team and organization access, and who can share, copy, or start collaboration tools. Anything left on "Keep Miro Default" follows your Miro settings. |
+
+Some sharing options may be restricted by your Miro plan or organization. If Miro refuses a setting, the node stops and nothing is created.
+
+## Output
+
+Each new board returns:
+
+| Field | Description |
+|---|---|
+| `boardId` | ID of the new board |
+| `boardUrl` | Link to open the new board |
+| `boardName` | Name of the new board |
+| `teamId` | Team the board was created in |
+| `sourceBoardId` | ID of the template board |
+| `appliedPolicy` | Sharing settings sent to Miro, or `Miro defaults` |
+| `populatedFrames` | Each filled frame's title, frame ID, and text ID |
+
+## Safety checks
+
+- **Before copying**, the node re-checks the template (titles still unique, mapped frames still exist) and that every frame has content. If anything fails, nothing is created.
+- **After copying**, if filling a frame fails, the error includes the new board's link and which frames were already filled, so nothing is lost silently.
+- With **Continue on Fail** turned on, one failing item doesn't stop the others.
+
+## Example workflow
+
+**n8n Form → Miro Template Board → Slack**
+
+1. A form collects Customer, Call Summary, Pain Points, and Next Steps.
+2. Miro Template Board copies your call template and fills each frame.
+3. Slack posts the new board's link to your team channel.
+
+## Compatibility
+
+Tested with n8n 2.41.4 and 2.41.6.
+
+## Resources
+
+- [n8n community nodes documentation](https://docs.n8n.io/integrations/#community-nodes)
+- [Miro REST API](https://developers.miro.com/reference)
+- [Miro OAuth 2.0 guide](https://developers.miro.com/docs/getting-started-with-oauth)
+
+## License
+
+[MIT](LICENSE.md)
