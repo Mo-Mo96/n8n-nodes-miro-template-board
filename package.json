@@ -31,7 +31,8 @@
         "n8nNodesApiVersion": 1,
         "strict": true,
         "credentials": [
-            "dist/credentials/MiroApi.credentials.js"
+            "dist/credentials/MiroApi.credentials.js",
+            "dist/credentials/MiroOAuth2Api.credentials.js"
         ],
         "nodes": [
             "dist/nodes/MiroTemplateBoard/MiroTemplateBoard.node.js"

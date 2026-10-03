@@ -44,7 +44,10 @@ async function miroRequest(
 	qs: IDataObject = {},
 	body?: IDataObject,
 ): Promise<IDataObject> {
-	return (await this.helpers.httpRequestWithAuthentication.call(this, 'miroApi', {
+		// Use whichever credential type the user picked in the node's Authentication setting.
+		const credentialType =
+		this.getNode().parameters.authentication === 'oAuth2' ? 'miroOAuth2Api' : 'miroApi';
+	return (await this.helpers.httpRequestWithAuthentication.call(this, credentialType, {
 		method,
 		url: `${MIRO_API}${path}`,
 		qs,
@@ -146,9 +149,25 @@ export class MiroTemplateBoard implements INodeType {
 			{
 				name: 'miroApi',
 				required: true,
+				displayOptions: { show: { authentication: ['accessToken'] } },
+			},
+			{
+				name: 'miroOAuth2Api',
+				required: true,
+				displayOptions: { show: { authentication: ['oAuth2'] } },
 			},
 		],
 		properties: [
+			{
+				displayName: 'Authentication',
+				name: 'authentication',
+				type: 'options',
+				options: [
+					{ name: 'Access Token', value: 'accessToken' },
+					{ name: 'OAuth2', value: 'oAuth2' },
+				],
+				default: 'accessToken',
+			},
 			{
 				displayName: 'Source Board',
 				name: 'sourceBoard',
