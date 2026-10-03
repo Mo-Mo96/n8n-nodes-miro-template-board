@@ -456,13 +456,31 @@ export class MiroTemplateBoard implements INodeType {
 				// ---------- 3. Copy the board ----------
 				const copyBody: IDataObject = { name: boardName, teamId };
 				if (policy) copyBody.policy = policy;
-				const newBoard = await miroRequest.call(
-					this,
-					'PUT',
-					'/boards',
-					{ copy_from: sourceBoardId },
-					copyBody,
-				);
+				let newBoard: IDataObject;
+				try {
+					newBoard = await miroRequest.call(
+						this,
+						'PUT',
+						'/boards',
+						{ copy_from: sourceBoardId },
+						copyBody,
+					);
+				} catch (copyError) {
+					// If sharing settings were sent, they are the most likely reason Miro refused the copy
+					// (plan or organization rules). Say so, instead of n8n's generic "check your credentials".
+					throw new NodeApiError(
+						this.getNode(),
+						copyError as JsonObject,
+						policy
+							? {
+									itemIndex,
+									message: 'Miro refused to create the board with these sharing settings, so nothing was created',
+									description:
+										'Your Miro plan or organization settings may not allow one of the chosen options. Change the sharing settings or turn off Customize Sharing, then try again.',
+								}
+							: { itemIndex },
+					);
+				}
 				const newBoardId = newBoard.id as string;
 				const newBoardUrl = newBoard.viewLink as string;
 
@@ -538,10 +556,10 @@ export class MiroTemplateBoard implements INodeType {
 					});
 					continue;
 				}
-								// Our own errors pass through unchanged (n8n returns the same error when wrapping one).
-								if (error instanceof NodeOperationError) {
-									throw new NodeOperationError(this.getNode(), error, { itemIndex });
-								}
+				// Our own errors pass through unchanged (n8n returns the same error when wrapping one).
+				if (error instanceof NodeOperationError) {
+					throw new NodeOperationError(this.getNode(), error, { itemIndex });
+				}
 				// Anything not already a NodeOperationError came from the Miro API call itself.
 				throw new NodeApiError(this.getNode(), error as JsonObject, { itemIndex });
 			}
