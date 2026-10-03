@@ -9,10 +9,7 @@ export class MiroApi implements ICredentialType {
 	name = 'miroApi';
 
 	displayName = 'Miro API';
-	icon = {
-		light: 'file:../nodes/MiroTemplateBoard/example.svg',
-		dark: 'file:../nodes/MiroTemplateBoard/example.dark.svg',
-	} as const;
+	icon = 'file:../nodes/MiroTemplateBoard/miro.svg' as const;
 
 	documentationUrl = 'https://developers.miro.com/docs/getting-started-with-oauth';
 
